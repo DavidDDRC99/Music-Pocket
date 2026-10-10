@@ -22,3 +22,4 @@ El servei Windows serà el responsable de Telegram/Telethon, de la cua persisten
 ## Publicació
 
 El contingut és buildless i es pot publicar amb GitHub Pages apuntant a aquesta carpeta o copiant-ne els fitxers a `dist/`.
+
