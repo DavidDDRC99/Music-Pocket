@@ -41,7 +41,7 @@ async function enqueue(track) {
   const item = { ...track, status: 'pending', addedAt: new Date().toISOString() };
   state.added.add(track.id); state.queue.push(item); saveQueue(); renderResults(await searchTracks(state.query)); renderQueue(); showToast(`${track.title} s’ha afegit a la cua`);
   if (state.serverUrl) {
-    try { const response = await fetch(`${apiBase()}/api/imports`, apiOptions({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spotifyUrl: track.url, track }) })); if (!response.ok) throw new Error(); showToast('Enviat al servidor'); } catch (_) { item.status = 'error'; saveQueue(); renderQueue(); showToast('No s’ha pogut contactar amb el servei'); }
+    try { const response = await fetch(`${apiBase()}/api/imports`, apiOptions({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceUrl: track.url || '', source: track.source || 'manual', track }) })); if (!response.ok) throw new Error(); showToast('Enviat al servidor'); } catch (_) { item.status = 'error'; saveQueue(); renderQueue(); showToast('No s’ha pogut contactar amb el servei'); }
   }
 }
 
@@ -58,3 +58,4 @@ document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click',
 if (!state.serverUrl) setOffline();
 refresh();
 renderQueue();
+
