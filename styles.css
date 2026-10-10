@@ -90,3 +90,4 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .toast { position: fixed; z-index: 10; bottom: 94px; left: 50%; max-width: calc(100vw - 36px); padding: 11px 15px; border-radius: 13px; background: #191b22; color: white; font-size: 13px; opacity: 0; pointer-events: none; transform: translate(-50%, 10px); transition: .22s ease; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (min-width: 700px) { .app-shell { padding-top: 52px; } .hero-card { min-height: 220px; padding: 38px; } .hero-copy h2 { font-size: 37px; } }
+
