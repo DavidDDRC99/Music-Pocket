@@ -15,24 +15,40 @@ function saveQueue() { localStorage.setItem('music-pocket-queue', JSON.stringify
 function initials(track) { return (track.initials || track.title.split(/\s+/).slice(0, 2).map((x) => x[0]).join('')).toUpperCase(); }
 function showToast(message) { const toast = $('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 2600); }
 
-async function searchTracks(query) {
-  if (!query) return demoTracks;
-  if (state.serverUrl) {
-    try {
-      const response = await fetch(`${apiBase()}/api/search?q=${encodeURIComponent(query)}`, apiOptions());
-      if (response.ok) {
-        const tracks = await response.json();
-        $('modeBadge').textContent = 'SERVIDOR';
-        return tracks;
-      }
-    } catch (_) { setOffline('Servidor no disponible · cercant al catàleg públic'); }
-  }
+const searchCache = new Map();
+let searchSequence = 0;
+let currentTracks = [];
+let callbackSequence = 0;
 
-  // iTunes ofereix una cerca pública de cançons sense requerir Spotify Premium ni una clau API.
-  try {
-    const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=25&country=ES`);
-    if (!response.ok) throw new Error('iTunes search failed');
-    const payload = await response.json();
+// Apple's supported cross-site callback avoids browser CORS restrictions.
+function publicSearch(query) {
+  return new Promise((resolve, reject) => {
+    const callback = `musicPocketSearch${++callbackSequence}`;
+    const script = document.createElement('script');
+    let settled = false;
+    const finish = (error, payload) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      script.remove();
+      // A late response after timeout must remain harmless.
+      window[callback] = () => {};
+      setTimeout(() => { delete window[callback]; }, 60000);
+      error ? reject(error) : resolve(payload);
+    };
+    const timer = setTimeout(() => finish(new Error('La cerca ha trigat massa. Torna-ho a provar.')), 12000);
+    window[callback] = (payload) => finish(null, payload);
+    script.onerror = () => finish(new Error('No s’ha pogut connectar al catàleg. Torna-ho a provar.'));
+    script.src = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=25&country=ES&callback=${callback}`;
+    document.head.appendChild(script);
+  });
+}
+
+async function searchTracks(query) {
+    const key = query.toLocaleLowerCase();
+    if (searchCache.has(key)) return searchCache.get(key);
+    const payload = await publicSearch(query);
+    if (!Array.isArray(payload.results)) throw new Error('El catàleg no ha retornat una resposta vàlida.');
     const tracks = payload.results.map((result) => ({
       id: `itunes-${result.trackId}`,
       title: result.trackName,
@@ -40,15 +56,10 @@ async function searchTracks(query) {
       album: result.collectionName || 'Àlbum desconegut',
       url: result.trackViewUrl || '',
       source: 'itunes',
-      art: result.artworkUrl100 ? result.artworkUrl100.replace('100x100', '300x300') : '',
       initials: `${result.artistName?.[0] || ''}${result.trackName?.[0] || ''}`,
     }));
-    $('modeBadge').textContent = 'CATÀLEG PÚBLIC';
+    searchCache.set(key, tracks);
     return tracks;
-  } catch (_) {
-    $('modeBadge').textContent = 'MODE DEMO';
-    return demoTracks.filter((track) => `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query.toLowerCase()));
-  }
 }
 
 function setOffline(label = 'Mode demo · configura el servei Windows') { $('connectionStatus').innerHTML = `<span class="status-dot" style="background:#d99727;box-shadow:0 0 0 4px #fff0d2"></span><span>${label}</span>`; $('modeBadge').textContent = 'MODE DEMO'; }
@@ -67,19 +78,51 @@ function escapeHtml(value = '') { return value.replace(/[&<>'"]/g, (char) => ({ 
 async function enqueue(track) {
   if (state.added.has(track.id)) return;
   const item = { ...track, status: 'pending', addedAt: new Date().toISOString() };
-  state.added.add(track.id); state.queue.push(item); saveQueue(); renderResults(await searchTracks(state.query)); renderQueue(); showToast(`${track.title} s’ha afegit a la cua`);
+  state.added.add(track.id); state.queue.push(item); saveQueue(); renderResults(currentTracks); renderQueue(); showToast(`${track.title} s’ha afegit a la cua${state.serverUrl ? '' : ' local'}`);
   if (state.serverUrl) {
     try { const response = await fetch(`${apiBase()}/api/imports`, apiOptions({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceUrl: track.url || '', source: track.source || 'manual', track }) })); if (!response.ok) throw new Error(); showToast('Enviat al servidor'); } catch (_) { item.status = 'error'; saveQueue(); renderQueue(); showToast('No s’ha pogut contactar amb el servei'); }
   }
 }
 
 async function refresh() {
-  const tracks = await searchTracks(state.query);
-  $('resultsTitle').textContent = state.query ? `${tracks.length} coincidències` : 'Descobreix música';
-  renderResults(tracks);
+  const sequence = ++searchSequence;
+  const query = state.query;
+  currentTracks = [];
+  $('results').replaceChildren();
+  $('emptyState').hidden = true;
+  $('results').setAttribute('aria-busy', 'false');
+  $('modeBadge').textContent = 'CERCA DE CANÇONS';
+  if (query.length < 2) {
+    $('resultsTitle').textContent = 'Escriu el nom d’una cançó o artista';
+    return;
+  }
+  $('resultsTitle').textContent = 'Cercant cançons…';
+  $('results').setAttribute('aria-busy', 'true');
+  try {
+    const tracks = await searchTracks(query);
+    if (sequence !== searchSequence || query !== state.query) return;
+    currentTracks = tracks;
+    $('resultsTitle').textContent = `${tracks.length} coincidències`;
+    $('emptyState').querySelector('h3').textContent = 'No s’han trobat cançons';
+    $('emptyState').querySelector('p').textContent = 'Prova amb el títol i el nom de l’artista.';
+    renderResults(tracks);
+  } catch (error) {
+    if (sequence !== searchSequence || query !== state.query) return;
+    $('resultsTitle').textContent = 'No s’ha pogut completar la cerca';
+    $('emptyState').hidden = false;
+    $('emptyState').querySelector('h3').textContent = 'Torna-ho a provar';
+    $('emptyState').querySelector('p').textContent = error.message;
+    const retry = document.createElement('button');
+    retry.className = 'primary-button';
+    retry.textContent = 'Reintenta la cerca';
+    retry.addEventListener('click', refresh);
+    $('results').appendChild(retry);
+  } finally {
+    if (sequence === searchSequence) $('results').setAttribute('aria-busy', 'false');
+  }
 }
 let searchTimer;
-$('searchInput').addEventListener('input', (event) => { state.query = event.target.value.trim(); $('clearSearch').hidden = !state.query; clearTimeout(searchTimer); searchTimer = setTimeout(refresh, 180); });
+$('searchInput').addEventListener('input', (event) => { state.query = event.target.value.trim(); ++searchSequence; $('clearSearch').hidden = !state.query; clearTimeout(searchTimer); $('results').replaceChildren(); $('emptyState').hidden = true; $('resultsTitle').textContent = state.query.length < 2 ? 'Escriu el nom d’una cançó o artista' : 'Cercant cançons…'; searchTimer = setTimeout(refresh, 450); });
 $('clearSearch').addEventListener('click', () => { $('searchInput').value = ''; state.query = ''; $('clearSearch').hidden = true; refresh(); });
 $('pasteLinkButton').addEventListener('click', async () => { const link = prompt('Enganxa l’enllaç de Spotify'); if (!link) return; const match = link.match(/track\/([A-Za-z0-9]+)/); const track = { id: match ? match[1] : `link-${Date.now()}`, title: 'Cançó des de Spotify', artist: 'Pendent de resoldre', album: 'Enllaç rebut', initials: 'SP', url: link, art: 'linear-gradient(135deg,#1ed760,#0b8f43)' }; await enqueue(track); });
 $('settingsButton').addEventListener('click', () => { $('serverUrl').value = state.serverUrl; $('serverToken').value = state.serverToken; $('settingsDialog').showModal(); });
@@ -87,7 +130,7 @@ $('settingsForm').addEventListener('submit', (event) => { if (event.submitter?.v
 $('viewQueueButton').addEventListener('click', () => showToast('La vista completa de cua arribarà en el següent increment'));
 document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active')); tab.classList.add('active'); if (tab.dataset.view !== 'discover') showToast(`${tab.dataset.view === 'queue' ? 'Cua' : 'Historial'}: pròximament`); }));
 
-if (!state.serverUrl) setOffline();
+if (!state.serverUrl) setOffline('Cerca disponible · importació sense configurar');
 refresh();
 renderQueue();
 
