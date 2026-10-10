@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ca">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f7f8" />
+    <meta name="description" content="Afegeix música al teu servidor des de l'iPhone." />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Music Pocket</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">LA TEVA BIBLIOTECA</p>
+          <h1>Music Pocket</h1>
+        </div>
+        <button class="icon-button" id="settingsButton" aria-label="Obre la configuració">⚙</button>
+      </header>
+
+      <section class="status-pill" id="connectionStatus" aria-live="polite">
+        <span class="status-dot"></span>
+        <span>Servidor connectat</span>
+        <span class="status-detail">Tailscale · Linux</span>
+      </section>
+
+      <section class="hero-card">
+        <div class="hero-copy">
+          <p class="eyebrow">AFEGEIX SENSE COMPLICACIONS</p>
+          <h2>Què vols escoltar avui?</h2>
+          <p>Busca una cançó i envia-la a la teva biblioteca.</p>
+        </div>
+        <div class="hero-orb" aria-hidden="true"><span>♫</span></div>
+      </section>
+
+      <section class="search-section" aria-label="Cerca música">
+        <label class="search-box">
+          <span aria-hidden="true">⌕</span>
+          <input id="searchInput" type="search" placeholder="Artista, cançó o àlbum" autocomplete="off" />
+          <button id="clearSearch" class="clear-button" aria-label="Neteja la cerca" hidden>×</button>
+        </label>
+        <button class="paste-link" id="pasteLinkButton">Enganxa un enllaç de Spotify</button>
+      </section>
+
+      <section class="section-heading">
+        <div>
+          <p class="eyebrow">RESULTATS</p>
+          <h2 id="resultsTitle">Descobreix música</h2>
+        </div>
+        <span class="demo-badge" id="modeBadge">MODE DEMO</span>
+      </section>
+
+      <section class="results" id="results" aria-live="polite"></section>
+
+      <section class="empty-state" id="emptyState" hidden>
+        <div class="empty-icon">⌁</div>
+        <h3>Encara no hi ha resultats</h3>
+        <p>Prova amb el nom d’un artista, una cançó o enganxa un enllaç.</p>
+      </section>
+
+      <section class="queue-preview" id="queuePreview">
+        <div class="section-heading compact">
+          <div>
+            <p class="eyebrow">ACTIVITAT</p>
+            <h2>La teva cua</h2>
+          </div>
+          <button class="text-button" id="viewQueueButton">Veure-ho tot</button>
+        </div>
+        <div id="queueList" class="queue-list"></div>
+      </section>
+
+      <nav class="tabbar" aria-label="Navegació principal">
+        <button class="tab active" data-view="discover"><span>⌕</span><small>Cerca</small></button>
+        <button class="tab" data-view="queue"><span>◷</span><small>Cua <b id="queueCount">0</b></small></button>
+        <button class="tab" data-view="history"><span>✓</span><small>Historial</small></button>
+      </nav>
+    </main>
+
+    <dialog id="settingsDialog" class="settings-dialog">
+      <form method="dialog" class="dialog-card" id="settingsForm">
+        <div class="dialog-header"><div><p class="eyebrow">CONNEXIÓ</p><h2>Configuració</h2></div><button value="cancel" class="close-button" aria-label="Tanca">×</button></div>
+        <label class="field-label" for="serverUrl">URL del servei Windows</label>
+        <input class="field-input" id="serverUrl" placeholder="http://100.x.x.x:8787" inputmode="url" />
+        <label class="field-label" for="serverToken">Clau d’accés</label>
+        <input class="field-input" id="serverToken" type="password" placeholder="X-API-Key" autocomplete="off" />
+        <p class="field-help">El servei s’executarà a Windows i serà accessible per Tailscale. Deixa-ho buit per continuar en mode demo.</p>
+        <div class="dialog-actions"><button value="cancel" class="secondary-button">Cancel·la</button><button value="default" class="primary-button">Desa</button></div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
