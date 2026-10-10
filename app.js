@@ -18,9 +18,37 @@ function showToast(message) { const toast = $('toast'); toast.textContent = mess
 async function searchTracks(query) {
   if (!query) return demoTracks;
   if (state.serverUrl) {
-    try { const response = await fetch(`${apiBase()}/api/search?q=${encodeURIComponent(query)}`, apiOptions()); if (response.ok) return await response.json(); } catch (_) { setOffline('Servidor no disponible · mode demo'); }
+    try {
+      const response = await fetch(`${apiBase()}/api/search?q=${encodeURIComponent(query)}`, apiOptions());
+      if (response.ok) {
+        const tracks = await response.json();
+        $('modeBadge').textContent = 'SERVIDOR';
+        return tracks;
+      }
+    } catch (_) { setOffline('Servidor no disponible · cercant al catàleg públic'); }
   }
-  return demoTracks.filter((track) => `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query.toLowerCase()));
+
+  // iTunes ofereix una cerca pública de cançons sense requerir Spotify Premium ni una clau API.
+  try {
+    const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=25&country=ES`);
+    if (!response.ok) throw new Error('iTunes search failed');
+    const payload = await response.json();
+    const tracks = payload.results.map((result) => ({
+      id: `itunes-${result.trackId}`,
+      title: result.trackName,
+      artist: result.artistName,
+      album: result.collectionName || 'Àlbum desconegut',
+      url: result.trackViewUrl || '',
+      source: 'itunes',
+      art: result.artworkUrl100 ? result.artworkUrl100.replace('100x100', '300x300') : '',
+      initials: `${result.artistName?.[0] || ''}${result.trackName?.[0] || ''}`,
+    }));
+    $('modeBadge').textContent = 'CATÀLEG PÚBLIC';
+    return tracks;
+  } catch (_) {
+    $('modeBadge').textContent = 'MODE DEMO';
+    return demoTracks.filter((track) => `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query.toLowerCase()));
+  }
 }
 
 function setOffline(label = 'Mode demo · configura el servei Windows') { $('connectionStatus').innerHTML = `<span class="status-dot" style="background:#d99727;box-shadow:0 0 0 4px #fff0d2"></span><span>${label}</span>`; $('modeBadge').textContent = 'MODE DEMO'; }
@@ -45,7 +73,11 @@ async function enqueue(track) {
   }
 }
 
-async function refresh() { const tracks = await searchTracks(state.query); $('resultsTitle').textContent = state.query ? 'Coincidències' : 'Descobreix música'; renderResults(tracks); }
+async function refresh() {
+  const tracks = await searchTracks(state.query);
+  $('resultsTitle').textContent = state.query ? `${tracks.length} coincidències` : 'Descobreix música';
+  renderResults(tracks);
+}
 let searchTimer;
 $('searchInput').addEventListener('input', (event) => { state.query = event.target.value.trim(); $('clearSearch').hidden = !state.query; clearTimeout(searchTimer); searchTimer = setTimeout(refresh, 180); });
 $('clearSearch').addEventListener('click', () => { $('searchInput').value = ''; state.query = ''; $('clearSearch').hidden = true; refresh(); });
