@@ -13,6 +13,13 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.import-card { padding: 18px; border-radius: 18px; background: white; border: 1px solid var(--line); }
+.import-card strong { display: block; margin-bottom: 6px; }
+.import-phase { font-size: 13px; color: var(--blue); margin: 14px 0 8px; }
+.import-card progress { width: 100%; height: 7px; accent-color: var(--blue); }
+.import-card .field-help { margin-bottom: 10px; }
+button:disabled { opacity: .5; cursor: wait; }
 body { margin: 0; background: radial-gradient(circle at 90% 0%, #eef2ff 0, transparent 28rem), var(--canvas); color: var(--ink); min-height: 100vh; }
 button, input { font: inherit; }
 button { border: 0; cursor: pointer; }
