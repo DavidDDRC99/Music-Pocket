@@ -6,7 +6,8 @@ const demoTracks = [
   { id: 'demo-5', title: 'Lisztomania', artist: 'Phoenix', album: 'Wolfgang Amadeus Phoenix', initials: 'PX', art: 'linear-gradient(135deg,#f6d365,#fda085)' },
 ];
 
-const state = { query: '', queue: JSON.parse(localStorage.getItem('music-pocket-queue') || '[]'), history: [], added: new Set(), serverUrl: localStorage.getItem('music-pocket-server') || '', serverToken: localStorage.getItem('music-pocket-token') || '' };
+const privateSite = location.hostname.endsWith('.ts.net') || location.hostname === '127.0.0.1';
+const state = { query: '', queue: [], view: 'discover', added: new Set(), sending: new Set(), serverUrl: privateSite ? location.origin : localStorage.getItem('music-pocket-server') || '', serverToken: privateSite ? '' : localStorage.getItem('music-pocket-token') || '' };
 const $ = (id) => document.getElementById(id);
 const apiBase = () => state.serverUrl.replace(/\/$/, '');
 const apiOptions = (options = {}) => ({ ...options, headers: { ...(options.headers || {}), ...(state.serverToken ? { 'X-API-Key': state.serverToken } : {}) } });
@@ -56,6 +57,7 @@ async function searchTracks(query) {
       album: result.collectionName || 'Àlbum desconegut',
       url: result.trackViewUrl || '',
       source: 'itunes',
+      duration: Math.round((result.trackTimeMillis || 0) / 1000),
       initials: `${result.artistName?.[0] || ''}${result.trackName?.[0] || ''}`,
     }));
     searchCache.set(key, tracks);
@@ -68,20 +70,87 @@ function renderResults(tracks) {
   $('emptyState').hidden = tracks.length !== 0;
   document.querySelectorAll('.add-button').forEach((button) => button.addEventListener('click', () => enqueue(JSON.parse(decodeURIComponent(button.dataset.track)))));
 }
+const completed = (job) => ['done', 'duplicate', 'cancelled'].includes(job.status);
 function renderQueue() {
-  $('queueCount').textContent = state.queue.filter((item) => item.status !== 'done').length;
-  $('queueList').innerHTML = state.queue.length ? state.queue.slice(-4).reverse().map((item) => `<div class="queue-item"><div class="art" style="--art:${item.art || 'linear-gradient(135deg,#8b9cf5,#374cb8)'}">${initials(item)}</div><div class="track-meta"><div class="track-title">${escapeHtml(item.title)}</div><div class="track-artist">${escapeHtml(item.artist)}</div></div><span class="queue-state ${item.status}">${statusLabel(item.status)}</span></div>`).join('') : '<p class="field-help">La cua està buida. Quan afegeixis una cançó, apareixerà aquí.</p>';
+  $('queueCount').textContent = state.queue.filter((item) => !completed(item)).length;
+  const jobs = state.view === 'history' ? state.queue.filter(completed) : state.view === 'queue' ? state.queue.filter((job) => !completed(job)) : state.queue.slice(0, 4);
+  $('queueList').replaceChildren();
+  if (!jobs.length) {
+    const p = document.createElement('p'); p.className = 'field-help';
+    p.textContent = !state.serverUrl ? 'Connecta el servei de casa per veure les importacions.' : state.view === 'history' ? 'Les importacions completades apareixeran aquí.' : 'La cua està buida. Cerca una cançó i prem +.';
+    $('queueList').appendChild(p);
+  }
+  for (const job of jobs) {
+    const row = document.createElement('article'); row.className = 'import-card';
+    const title = document.createElement('strong'); title.textContent = job.track.title;
+    const artist = document.createElement('p'); artist.className = 'track-artist'; artist.textContent = job.track.artist;
+    const phase = document.createElement('p'); phase.className = 'import-phase'; phase.textContent = job.phase || statusLabel(job.status);
+    const progress = document.createElement('progress'); progress.max = 100; progress.value = job.progress || 0; progress.setAttribute('aria-label', `Progrés de ${job.track.title}`);
+    const message = document.createElement('p'); message.className = 'field-help'; message.textContent = job.message || '';
+    row.append(title, artist, phase, progress, message);
+    const action = ['error','cancelled','waiting'].includes(job.status) ? 'retry' : job.status === 'queued' ? 'cancel' : '';
+    if (action) {
+      const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = action === 'retry' ? 'Reintenta' : 'Cancel·la';
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try { await api(`/api/imports/${job.id}/${action}`, {method:'POST'}); await syncQueue(); }
+        catch (error) { showToast(error.message); button.disabled = false; }
+      }); row.appendChild(button);
+    }
+    $('queueList').appendChild(row);
+  }
 }
-function statusLabel(status) { return ({ pending: 'Pendent', processing: 'Processant', done: 'Importada', error: 'Error' })[status] || 'Pendent'; }
+function statusLabel(status) { return ({ queued: 'En cua', processing: 'Processant', done: 'Importada', duplicate: 'Ja la tens', error: 'Error', cancelled: 'Cancel·lada' })[status] || 'Pendent'; }
 function escapeHtml(value = '') { return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char])); }
 
 async function enqueue(track) {
-  if (state.added.has(track.id)) return;
-  const item = { ...track, status: 'pending', addedAt: new Date().toISOString() };
-  state.added.add(track.id); state.queue.push(item); saveQueue(); renderResults(currentTracks); renderQueue(); showToast(`${track.title} s’ha afegit a la cua${state.serverUrl ? '' : ' local'}`);
-  if (state.serverUrl) {
-    try { const response = await fetch(`${apiBase()}/api/imports`, apiOptions({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceUrl: track.url || '', source: track.source || 'manual', track }) })); if (!response.ok) throw new Error(); showToast('Enviat al servidor'); } catch (_) { item.status = 'error'; saveQueue(); renderQueue(); showToast('No s’ha pogut contactar amb el servei'); }
-  }
+  if (state.added.has(track.id) || state.sending.has(track.id)) return;
+  if (!state.serverUrl) { $('settingsButton').click(); showToast('Obre l’adreça privada de Music Pocket amb Tailscale activat.'); return; }
+  state.sending.add(track.id);
+  try {
+    await api('/api/imports', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sourceUrl:track.url || '',track})});
+    showToast('Petició rebuda al servidor');
+    await syncQueue();
+  } catch (error) { showToast(error.message); }
+  finally { state.sending.delete(track.id); }
+}
+
+async function api(path, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(apiBase() + path, apiOptions({...options, signal:controller.signal}));
+    const body = await response.json();
+    if (!response.ok) throw new Error(response.status === 401 ? 'Accés denegat. Revisa Tailscale o la clau d’accés.' : body.error || 'El servei no ha acceptat la petició.');
+    return body;
+  } catch (error) {
+    if (error.name === 'AbortError' || error instanceof TypeError) throw new Error('No es pot connectar. Comprova Tailscale i que Windows estigui encès.');
+    throw error;
+  } finally { clearTimeout(timer); }
+}
+let synchronizing = false;
+async function syncQueue() {
+  if (!state.serverUrl || synchronizing) return;
+  synchronizing = true;
+  try {
+    const [health, result] = await Promise.all([api('/api/health'),api('/api/imports')]);
+    state.queue = result.items;
+    state.added = new Set(state.queue.filter((job) => !['error','cancelled'].includes(job.status)).map((job) => job.track.id));
+    $('connectionStatus').textContent = health.libraryAvailable ? 'Connectat · biblioteca accessible' : 'Connectat · disc del servidor no disponible';
+    renderQueue();
+    if (state.view === 'discover' && currentTracks.length) renderResults(currentTracks);
+  } catch (error) { $('connectionStatus').textContent = error.message; }
+  finally { synchronizing = false; }
+}
+function selectView(view) {
+  state.view = view;
+  if (view !== 'discover') { ++searchSequence; clearTimeout(searchTimer); }
+  document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.view === view));
+  for (const selector of ['.hero-card','.search-section','.app-shell > .section-heading','#results','#emptyState']) document.querySelector(selector).hidden = view !== 'discover';
+  if (view === 'discover') refresh();
+  $('queuePreview').querySelector('h2').textContent = view === 'history' ? 'Historial' : 'La teva cua';
+  $('viewQueueButton').hidden = view !== 'discover';
+  renderQueue();
 }
 
 async function refresh() {
@@ -124,13 +193,25 @@ async function refresh() {
 let searchTimer;
 $('searchInput').addEventListener('input', (event) => { state.query = event.target.value.trim(); ++searchSequence; $('clearSearch').hidden = !state.query; clearTimeout(searchTimer); $('results').replaceChildren(); $('emptyState').hidden = true; $('resultsTitle').textContent = state.query.length < 2 ? 'Escriu el nom d’una cançó o artista' : 'Cercant cançons…'; searchTimer = setTimeout(refresh, 450); });
 $('clearSearch').addEventListener('click', () => { $('searchInput').value = ''; state.query = ''; $('clearSearch').hidden = true; refresh(); });
-$('pasteLinkButton').addEventListener('click', async () => { const link = prompt('Enganxa l’enllaç de Spotify'); if (!link) return; const match = link.match(/track\/([A-Za-z0-9]+)/); const track = { id: match ? match[1] : `link-${Date.now()}`, title: 'Cançó des de Spotify', artist: 'Pendent de resoldre', album: 'Enllaç rebut', initials: 'SP', url: link, art: 'linear-gradient(135deg,#1ed760,#0b8f43)' }; await enqueue(track); });
-$('settingsButton').addEventListener('click', () => { $('serverUrl').value = state.serverUrl; $('serverToken').value = state.serverToken; $('settingsDialog').showModal(); });
-$('settingsForm').addEventListener('submit', (event) => { if (event.submitter?.value !== 'default') return; state.serverUrl = $('serverUrl').value.trim(); state.serverToken = $('serverToken').value.trim(); localStorage.setItem('music-pocket-server', state.serverUrl); localStorage.setItem('music-pocket-token', state.serverToken); state.serverUrl ? showToast('Servei Windows configurat') : showToast('Mode demo activat'); if (!state.serverUrl) setOffline(); refresh(); });
-$('viewQueueButton').addEventListener('click', () => showToast('La vista completa de cua arribarà en el següent increment'));
-document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach((item) => item.classList.remove('active')); tab.classList.add('active'); if (tab.dataset.view !== 'discover') showToast(`${tab.dataset.view === 'queue' ? 'Cua' : 'Historial'}: pròximament`); }));
+$('pasteLinkButton').addEventListener('click', async () => { const link = prompt('Enganxa l’enllaç de la cançó de Spotify'); if (!link) return; const match = link.match(/^https:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?track\/([A-Za-z0-9]{22})(?:\?.*)?$/); if (!match) { showToast('Cal un enllaç de cançó de Spotify.'); return; } await enqueue({id:match[1], title:'Cançó de Spotify', artist:'Pendent de resoldre', source:'spotify', url:link}); });
+$('settingsButton').addEventListener('click', () => { $('serverUrl').value = state.serverUrl; $('serverUrl').readOnly = privateSite; $('serverToken').value = state.serverToken; $('serverToken').hidden = privateSite; document.querySelector('label[for="serverToken"]').hidden = privateSite; $('settingsDialog').showModal(); });
+$('settingsForm').addEventListener('submit', (event) => {
+  if (event.submitter?.value !== 'default') return;
+  const input = $('serverUrl').value.trim().replace(/\/$/, '');
+  if (input && !/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(input) && input !== location.origin) { event.preventDefault(); showToast('Introdueix l’adreça HTTPS privada de Tailscale.'); return; }
+  if (!privateSite && input && !$('serverToken').value.trim()) { location.href = input; return; }
+  state.serverUrl = privateSite ? location.origin : input;
+  state.serverToken = $('serverToken').value.trim();
+  localStorage.setItem('music-pocket-server',state.serverUrl); localStorage.setItem('music-pocket-token',state.serverToken);
+  state.queue = []; renderQueue(); syncQueue();
+});
+$('viewQueueButton').addEventListener('click', () => selectView('queue'));
+document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => selectView(tab.dataset.view)));
 
 if (!state.serverUrl) setOffline('Cerca disponible · importació sense configurar');
 refresh();
 renderQueue();
+syncQueue();
+setInterval(() => { if (!document.hidden) syncQueue(); }, 3000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncQueue(); });
 
