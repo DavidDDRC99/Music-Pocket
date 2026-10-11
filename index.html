@@ -81,15 +81,15 @@
       <form method="dialog" class="dialog-card" id="settingsForm">
         <div class="dialog-header"><div><p class="eyebrow">CONNEXIÓ</p><h2>Configuració</h2></div><button value="cancel" class="close-button" aria-label="Tanca">×</button></div>
         <label class="field-label" for="serverUrl">URL del servei Windows</label>
-        <input class="field-input" id="serverUrl" placeholder="http://100.x.x.x:8787" inputmode="url" />
+        <input class="field-input" id="serverUrl" placeholder="https://ordinador.xxxxx.ts.net" inputmode="url" />
         <label class="field-label" for="serverToken">Clau d’accés</label>
         <input class="field-input" id="serverToken" type="password" placeholder="X-API-Key" autocomplete="off" />
-        <p class="field-help">El servei s’executarà a Windows i serà accessible per Tailscale. Deixa-ho buit per continuar en mode demo.</p>
+        <p class="field-help">Activa Tailscale i obre l’adreça privada de Music Pocket: la connexió és automàtica i no cal copiar cap clau. Windows ha d’estar encès. La clau només és necessària per a una connexió manual des d’aquesta web pública.</p>
         <div class="dialog-actions"><button value="cancel" class="secondary-button">Cancel·la</button><button value="default" class="primary-button">Desa</button></div>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js?v=live-search-2"></script>
+    <script src="app.js?v=queue-v1"></script>
   </body>
 </html>
 
