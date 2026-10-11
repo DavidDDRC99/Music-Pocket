@@ -70,6 +70,39 @@ function renderResults(tracks) {
   $('emptyState').hidden = tracks.length !== 0;
   document.querySelectorAll('.add-button').forEach((button) => button.addEventListener('click', () => enqueue(JSON.parse(decodeURIComponent(button.dataset.track)))));
 }
+let selectedPlaylist = { id: '', name: '' };
+let pendingTrack = null;
+async function choosePlaylist(track) {
+  pendingTrack = track;
+  selectedPlaylist = { id: '', name: '' };
+  $('playlistTrackName').textContent = `${track.title} · ${track.artist}`;
+  const options = $('playlistOptions');
+  options.replaceChildren();
+  const library = document.createElement('label'); library.className = 'playlist-option selected';
+  library.innerHTML = '<input type="radio" name="playlist" value=""><span><strong>Només biblioteca</strong><small>No afegir a cap playlist</small></span>';
+  options.appendChild(library);
+  try {
+    const result = await api('/api/playlists');
+    for (const playlist of result.items || []) {
+      const option = document.createElement('label'); option.className = 'playlist-option';
+      option.innerHTML = `<input type="radio" name="playlist" value="${escapeHtml(playlist.id)}"><span><strong>${escapeHtml(playlist.name)}</strong><small>${playlist.songCount || 0} cançons</small></span>`;
+      options.appendChild(option);
+    }
+  } catch (error) {
+    const note = document.createElement('p'); note.className = 'field-help'; note.textContent = 'No s’han pogut carregar les playlists. La cançó encara es pot afegir només a la biblioteca.'; options.appendChild(note);
+  }
+  options.querySelectorAll('input').forEach((input) => input.addEventListener('change', () => {
+    options.querySelectorAll('.playlist-option').forEach((item) => item.classList.toggle('selected', item.contains(input) || item.querySelector('input')?.checked));
+    const playlist = [...options.querySelectorAll('input')].find((item) => item.checked);
+    selectedPlaylist = playlist?.value ? { id: playlist.value, name: playlist.closest('.playlist-option').querySelector('strong').textContent } : { id: '', name: '' };
+  }));
+  options.querySelector('input').checked = true;
+  $('playlistDialog').showModal();
+  return new Promise((resolve) => {
+    $('playlistForm').onsubmit = (event) => { if (event.submitter?.value !== 'default') { resolve(null); return; } resolve({ ...pendingTrack, playlistId: selectedPlaylist.id, playlistName: selectedPlaylist.name }); };
+    $('playlistDialog').addEventListener('close', () => resolve(null), { once: true });
+  });
+}
 const completed = (job) => ['done', 'duplicate', 'cancelled'].includes(job.status);
 function renderQueue() {
   $('queueCount').textContent = state.queue.filter((item) => !completed(item)).length;
@@ -108,7 +141,9 @@ async function enqueue(track) {
   if (!state.serverUrl) { $('settingsButton').click(); showToast('Obre l’adreça privada de Music Pocket amb Tailscale activat.'); return; }
   state.sending.add(track.id);
   try {
-    await api('/api/imports', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sourceUrl:track.url || '',track})});
+    const chosen = await choosePlaylist(track);
+    if (!chosen) return;
+    await api('/api/imports', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sourceUrl:chosen.url || '', track:chosen, playlistId:chosen.playlistId, playlistName:chosen.playlistName})});
     showToast('Petició rebuda al servidor');
     await syncQueue();
   } catch (error) { showToast(error.message); }
