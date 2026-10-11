@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#f7f7f8" />
     <meta name="description" content="Afegeix música al teu servidor des de l'iPhone." />
     <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
     <title>Music Pocket</title>
   </head>
@@ -86,6 +87,14 @@
         <input class="field-input" id="serverToken" type="password" placeholder="X-API-Key" autocomplete="off" />
         <p class="field-help">Activa Tailscale i obre l’adreça privada de Music Pocket: la connexió és automàtica i no cal copiar cap clau. Windows ha d’estar encès. La clau només és necessària per a una connexió manual des d’aquesta web pública.</p>
         <div class="dialog-actions"><button value="cancel" class="secondary-button">Cancel·la</button><button value="default" class="primary-button">Desa</button></div>
+      </form>
+    </dialog>
+    <dialog id="playlistDialog" class="settings-dialog">
+      <form method="dialog" class="dialog-card" id="playlistForm">
+        <div class="dialog-header"><div><p class="eyebrow">DESTINACIÓ</p><h2>On la vols posar?</h2></div><button value="cancel" class="close-button" aria-label="Tanca">×</button></div>
+        <p class="field-help playlist-track-name" id="playlistTrackName"></p>
+        <div class="playlist-options" id="playlistOptions"></div>
+        <div class="dialog-actions"><button value="cancel" class="secondary-button">Cancel·la</button><button value="default" class="primary-button" id="playlistConfirm">Afegeix</button></div>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
