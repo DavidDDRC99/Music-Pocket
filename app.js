@@ -259,7 +259,7 @@ function selectView(view) {
   state.view = view;
   if (view !== 'discover') { ++searchSequence; clearTimeout(searchTimer); }
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.view === view));
-  for (const selector of ['.search-section','.app-shell > .section-heading','#results','#emptyState']) document.querySelector(selector).hidden = view !== 'discover';
+  for (const selector of ['.search-panel','.app-shell > .section-heading','#results','#emptyState']) document.querySelector(selector).hidden = view !== 'discover';
   if (view === 'discover') refresh();
   $('queuePreview').querySelector('h2').textContent = view === 'history' ? 'Historial' : 'La teva cua';
   $('viewQueueButton').hidden = view !== 'discover';
