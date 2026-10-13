@@ -3,19 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f7f7f8" />
-    <meta name="description" content="Afegeix música al teu servidor des de l'iPhone." />
+    <meta name="theme-color" content="#081110" />
+    <meta name="description" content="Music Pocket · música al teu servidor privat." />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon-neon.png" type="image/png" />
     <link rel="apple-touch-icon" href="icon-neon.png" />
-    <link rel="stylesheet" href="styles.css?v=ui-v2" />
+    <link rel="stylesheet" href="styles.css?v=studio-v3" />
     <title>Music Pocket</title>
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
-        <div>
-          <h1>Music Pocket</h1>
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div>
+            <p class="eyebrow">PRIVATE MUSIC STUDIO</p>
+            <h1>Music Pocket</h1>
+          </div>
         </div>
         <button class="icon-button" id="settingsButton" aria-label="Obre la configuració">⚙</button>
       </header>
@@ -26,20 +30,28 @@
         <span class="status-detail">Tailscale · Linux</span>
       </section>
 
-      <section class="search-section" aria-label="Cerca música">
+      <section class="search-panel" aria-label="Cerca música">
+        <div class="search-heading">
+          <div>
+            <p class="eyebrow">ADD TO LIBRARY</p>
+            <h2>Troba una cançó.</h2>
+          </div>
+          <span class="search-spark" aria-hidden="true">✦</span>
+        </div>
         <label class="search-box">
-          <span aria-hidden="true">⌕</span>
+          <span class="search-icon" aria-hidden="true">⌕</span>
           <input id="searchInput" type="search" placeholder="Artista, cançó o àlbum" autocomplete="off" />
           <button id="clearSearch" class="clear-button" aria-label="Neteja la cerca" hidden>×</button>
         </label>
-        <button class="paste-link" id="pasteLinkButton">O enganxa un enllaç de Spotify</button>
+        <button class="paste-link" id="pasteLinkButton"><span aria-hidden="true">↗</span> Enganxa un enllaç de Spotify</button>
       </section>
 
-      <section class="section-heading">
+      <section class="section-heading results-heading">
         <div>
-          <p class="eyebrow">RESULTATS</p>
-          <h2 id="resultsTitle">Descobreix música</h2>
+          <p class="eyebrow">DISCOVER</p>
+          <h2 id="resultsTitle">Escriu el nom d’una cançó o artista</h2>
         </div>
+        <span class="section-accent" aria-hidden="true"></span>
       </section>
 
       <section class="results" id="results" aria-live="polite"></section>
@@ -47,48 +59,48 @@
       <section class="empty-state" id="emptyState" hidden>
         <div class="empty-icon">⌁</div>
         <h3>Encara no hi ha resultats</h3>
-        <p>Prova amb el nom d’un artista, una cançó o enganxa un enllaç.</p>
+        <p>Prova amb el títol i el nom de l’artista.</p>
       </section>
 
       <section class="queue-preview" id="queuePreview">
         <div class="section-heading compact">
           <div>
-            <p class="eyebrow">ACTIVITAT</p>
+            <p class="eyebrow">YOUR ACTIVITY</p>
             <h2>La teva cua</h2>
           </div>
-          <button class="text-button" id="viewQueueButton">Veure-ho tot</button>
+          <button class="text-button" id="viewQueueButton">Veure-ho tot <span aria-hidden="true">→</span></button>
         </div>
         <div id="queueList" class="queue-list"></div>
       </section>
 
       <nav class="tabbar" aria-label="Navegació principal">
-        <button class="tab active" data-view="discover"><span>⌕</span><small>Cerca</small></button>
-        <button class="tab" data-view="queue"><span>◷</span><small>Cua <b id="queueCount">0</b></small></button>
-        <button class="tab" data-view="history"><span>✓</span><small>Historial</small></button>
+        <button class="tab active" data-view="discover"><span aria-hidden="true">⌕</span><small>Cerca</small></button>
+        <button class="tab" data-view="queue"><span aria-hidden="true">◷</span><small>Cua <b id="queueCount">0</b></small></button>
+        <button class="tab" data-view="history"><span aria-hidden="true">✓</span><small>Historial</small></button>
       </nav>
     </main>
 
     <dialog id="settingsDialog" class="settings-dialog">
       <form method="dialog" class="dialog-card" id="settingsForm">
-        <div class="dialog-header"><div><p class="eyebrow">CONNEXIÓ</p><h2>Configuració</h2></div><button value="cancel" class="close-button" aria-label="Tanca">×</button></div>
+        <div class="dialog-header"><div><p class="eyebrow">CONNECTION</p><h2>Configuració</h2></div><button value="cancel" class="close-button" aria-label="Tanca">×</button></div>
         <label class="field-label" for="serverUrl">URL del servei Windows</label>
         <input class="field-input" id="serverUrl" placeholder="https://ordinador.xxxxx.ts.net" inputmode="url" />
         <label class="field-label" for="serverToken">Clau d’accés</label>
         <input class="field-input" id="serverToken" type="password" placeholder="X-API-Key" autocomplete="off" />
-        <p class="field-help">Activa Tailscale i obre l’adreça privada de Music Pocket: la connexió és automàtica i no cal copiar cap clau. Windows ha d’estar encès. La clau només és necessària per a una connexió manual des d’aquesta web pública.</p>
+        <p class="field-help">Activa Tailscale i obre l’adreça privada de Music Pocket. Windows ha d’estar encès. La clau només és necessària en una connexió manual des de la web pública.</p>
         <div class="dialog-actions"><button value="cancel" class="secondary-button">Cancel·la</button><button value="default" class="primary-button">Desa</button></div>
       </form>
     </dialog>
     <dialog id="playlistDialog" class="settings-dialog">
       <form method="dialog" class="dialog-card" id="playlistForm">
-        <div class="dialog-header"><div><p class="eyebrow">DESTINACIÓ</p><h2>On la vols posar?</h2></div><button value="cancel" class="close-button" aria-label="Tanca">×</button></div>
+        <div class="dialog-header"><div><p class="eyebrow">DESTINATION</p><h2>On la vols posar?</h2></div><button value="cancel" class="close-button" aria-label="Tanca">×</button></div>
         <p class="field-help playlist-track-name" id="playlistTrackName"></p>
         <div class="playlist-options" id="playlistOptions"></div>
         <div class="dialog-actions"><button value="cancel" class="secondary-button">Cancel·la</button><button value="default" class="primary-button" id="playlistConfirm">Afegeix</button></div>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js?v=ui-v2"></script>
+    <script src="app.js?v=studio-v3"></script>
   </body>
 </html>
 
