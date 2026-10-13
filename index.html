@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon-neon.png" type="image/png" />
     <link rel="apple-touch-icon" href="icon-neon.png" />
-    <link rel="stylesheet" href="styles.css?v=studio-v3" />
+    <link rel="stylesheet" href="styles.css?v=studio-v4" />
     <title>Music Pocket</title>
   </head>
   <body>
@@ -21,7 +21,20 @@
             <h1>Music Pocket</h1>
           </div>
         </div>
-        <button class="icon-button" id="settingsButton" aria-label="Obre la configuració">⚙</button>
+        <div class="topbar-actions">
+          <div class="volume-control">
+            <button class="icon-button volume-button" id="volumeButton" aria-label="Obre el volum general" aria-expanded="false">⌁</button>
+            <div class="volume-popover" id="volumePopover" hidden>
+              <div class="volume-popover-heading"><span>Volum general</span><strong id="volumeValue">75%</strong></div>
+              <div class="volume-row">
+                <button class="mute-button" id="muteButton" type="button" aria-label="Silencia el volum">⌁</button>
+                <input id="volumeRange" type="range" min="0" max="100" value="75" step="1" aria-label="Volum general" />
+              </div>
+              <p class="volume-help" id="volumeHelp">Volum principal de Windows</p>
+            </div>
+          </div>
+          <button class="icon-button" id="settingsButton" aria-label="Obre la configuració">⚙</button>
+        </div>
       </header>
 
       <section class="status-pill" id="connectionStatus" aria-live="polite">
@@ -100,7 +113,7 @@
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js?v=studio-v3"></script>
+    <script src="app.js?v=studio-v4"></script>
   </body>
 </html>
 
