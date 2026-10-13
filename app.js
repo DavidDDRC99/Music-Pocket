@@ -90,14 +90,18 @@ function stopPreview() {
     button.setAttribute('aria-pressed', 'false');
   });
 }
+function setPreviewButton(trackId, playing) {
+  const button = document.querySelector(`[data-preview-track="${CSS.escape(trackId)}"]`);
+  if (!button) return;
+  button.classList.toggle('is-playing', playing);
+  button.textContent = playing ? 'Ⅱ' : '▶';
+  button.setAttribute('aria-pressed', String(playing));
+}
 function togglePreview(track) {
   if (!track.previewUrl) { showToast('Aquesta versió no té previsualització disponible.'); return; }
   if (previewAudio && previewTrackId === track.id) {
-    if (previewAudio.paused) previewAudio.play().catch(() => showToast('No s’ha pogut reproduir la previsualització.'));
-    else previewAudio.pause();
-    document.querySelector(`[data-preview-track="${CSS.escape(track.id)}"]`)?.classList.toggle('is-playing', !previewAudio.paused);
-    document.querySelector(`[data-preview-track="${CSS.escape(track.id)}"]`).textContent = previewAudio.paused ? '▶' : 'Ⅱ';
-    document.querySelector(`[data-preview-track="${CSS.escape(track.id)}"]`).setAttribute('aria-pressed', String(!previewAudio.paused));
+    if (previewAudio.paused) previewAudio.play().then(() => setPreviewButton(track.id, true)).catch(() => showToast('No s’ha pogut reproduir la previsualització.'));
+    else { previewAudio.pause(); setPreviewButton(track.id, false); }
     return;
   }
   stopPreview();
