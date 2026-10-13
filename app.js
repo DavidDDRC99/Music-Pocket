@@ -20,6 +20,8 @@ const searchCache = new Map();
 let searchSequence = 0;
 let currentTracks = [];
 let callbackSequence = 0;
+let previewAudio = null;
+let previewTrackId = null;
 
 // Apple's supported cross-site callback avoids browser CORS restrictions.
 function publicSearch(query) {
@@ -58,21 +60,80 @@ async function searchTracks(query) {
       url: result.trackViewUrl || '',
       source: 'itunes',
       duration: Math.round((result.trackTimeMillis || 0) / 1000),
+      previewUrl: result.previewUrl || '',
+      artwork: result.artworkUrl100 || '',
       initials: `${result.artistName?.[0] || ''}${result.trackName?.[0] || ''}`,
     }));
     searchCache.set(key, tracks);
     return tracks;
 }
 
-function setOffline(label = 'Mode demo · configura el servei Windows') { $('connectionStatus').innerHTML = `<span class="status-dot" style="background:#d99727;box-shadow:0 0 0 4px #fff0d2"></span><span>${label}</span>`; }
+function setConnectionStatus(label, detail = '', online = true) {
+  $('connectionStatus').innerHTML = `<span class="status-dot"${online ? '' : ' style="background:#efb35b;box-shadow:0 0 0 4px rgba(239,179,91,.14),0 0 14px rgba(239,179,91,.45)"'}></span><span>${escapeHtml(label)}</span>${detail ? `<span class="status-detail">${escapeHtml(detail)}</span>` : ''}`;
+}
+function setOffline(label = 'Mode demo · configura el servei Windows') { setConnectionStatus(label, '', false); }
 function formatDuration(seconds) {
   const total = Math.max(0, Number(seconds) || 0);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
+function stopPreview() {
+  if (previewAudio) {
+    previewAudio.pause();
+    previewAudio.removeAttribute('src');
+    previewAudio.load();
+  }
+  previewAudio = null;
+  previewTrackId = null;
+  document.querySelectorAll('.preview-button.is-playing').forEach((button) => {
+    button.classList.remove('is-playing');
+    button.textContent = '▶';
+    button.setAttribute('aria-pressed', 'false');
+  });
+}
+function togglePreview(track) {
+  if (!track.previewUrl) { showToast('Aquesta versió no té previsualització disponible.'); return; }
+  if (previewAudio && previewTrackId === track.id) {
+    if (previewAudio.paused) previewAudio.play().catch(() => showToast('No s’ha pogut reproduir la previsualització.'));
+    else previewAudio.pause();
+    document.querySelector(`[data-preview-track="${CSS.escape(track.id)}"]`)?.classList.toggle('is-playing', !previewAudio.paused);
+    document.querySelector(`[data-preview-track="${CSS.escape(track.id)}"]`).textContent = previewAudio.paused ? '▶' : 'Ⅱ';
+    document.querySelector(`[data-preview-track="${CSS.escape(track.id)}"]`).setAttribute('aria-pressed', String(!previewAudio.paused));
+    return;
+  }
+  stopPreview();
+  previewAudio = new Audio(track.previewUrl);
+  previewAudio.preload = 'none';
+  previewTrackId = track.id;
+  previewAudio.addEventListener('ended', stopPreview, { once: true });
+  previewAudio.addEventListener('error', () => { stopPreview(); showToast('No s’ha pogut carregar la previsualització.'); }, { once: true });
+  previewAudio.play().then(() => {
+    const button = document.querySelector(`[data-preview-track="${CSS.escape(track.id)}"]`);
+    if (button) { button.classList.add('is-playing'); button.textContent = 'Ⅱ'; button.setAttribute('aria-pressed', 'true'); }
+  }).catch(() => { stopPreview(); showToast('No s’ha pogut reproduir la previsualització.'); });
+}
 function renderResults(tracks) {
-  $('results').innerHTML = tracks.map((track) => { const added = state.added.has(track.id); return `<article class="track-card"><div class="art" style="--art:${track.art || 'linear-gradient(135deg,#8b9cf5,#374cb8)'}">${initials(track)}</div><div class="track-meta"><div class="track-title">${escapeHtml(track.title)}</div><div class="track-artist">${escapeHtml(track.artist)}</div><div class="track-album">${escapeHtml(track.album || 'Àlbum desconegut')}</div></div><span class="track-duration">${formatDuration(track.duration)}</span><button class="add-button ${added ? 'added' : ''}" data-track="${encodeURIComponent(JSON.stringify(track))}" aria-label="${added ? 'Afegida' : 'Afegeix'}">${added ? '✓' : '+'}</button></article>`; }).join('');
+  stopPreview();
+  const results = $('results');
+  results.replaceChildren();
+  for (const track of tracks) {
+    const added = state.added.has(track.id);
+    const card = document.createElement('article'); card.className = 'track-card';
+    const art = document.createElement('div'); art.className = 'art';
+    if (track.artwork) { art.style.backgroundImage = `url("${track.artwork}")`; art.classList.add('has-image'); }
+    const artInitials = document.createElement('span'); artInitials.textContent = initials(track); art.appendChild(artInitials);
+    const preview = document.createElement('button'); preview.className = 'preview-button'; preview.type = 'button'; preview.textContent = '▶'; preview.dataset.previewTrack = track.id; preview.disabled = !track.previewUrl; preview.setAttribute('aria-label', track.previewUrl ? `Escolta una previsualització de ${track.title}` : 'Previsualització no disponible'); preview.setAttribute('aria-pressed', 'false');
+    preview.addEventListener('click', () => togglePreview(track)); art.appendChild(preview);
+    const meta = document.createElement('div'); meta.className = 'track-meta';
+    const title = document.createElement('div'); title.className = 'track-title'; title.textContent = track.title;
+    const artist = document.createElement('div'); artist.className = 'track-artist'; artist.textContent = track.artist;
+    const subline = document.createElement('div'); subline.className = 'track-subline';
+    const album = document.createElement('span'); album.className = 'track-album'; album.textContent = track.album || 'Àlbum desconegut';
+    const duration = document.createElement('span'); duration.className = 'track-duration'; duration.textContent = formatDuration(track.duration);
+    subline.append(album, duration); meta.append(title, artist, subline);
+    const add = document.createElement('button'); add.className = `add-button ${added ? 'added' : ''}`; add.type = 'button'; add.textContent = added ? '✓' : '+'; add.dataset.track = encodeURIComponent(JSON.stringify(track)); add.setAttribute('aria-label', added ? 'Afegida' : `Afegeix ${track.title}`); add.addEventListener('click', () => enqueue(track));
+    card.append(art, meta, add); results.appendChild(card);
+  }
   $('emptyState').hidden = tracks.length !== 0;
-  document.querySelectorAll('.add-button').forEach((button) => button.addEventListener('click', () => enqueue(JSON.parse(decodeURIComponent(button.dataset.track)))));
 }
 let selectedPlaylist = { id: '', name: '' };
 let pendingTrack = null;
@@ -188,10 +249,10 @@ async function syncQueue() {
     const [health, result] = await Promise.all([api('/api/health'),api('/api/imports')]);
     state.queue = result.items;
     state.added = new Set(state.queue.filter((job) => !['error','cancelled'].includes(job.status)).map((job) => job.track.id));
-    $('connectionStatus').textContent = health.libraryAvailable ? 'Connectat · biblioteca accessible' : 'Connectat · disc del servidor no disponible';
+    setConnectionStatus(health.libraryAvailable ? 'Servidor connectat' : 'Disc del servidor no disponible', health.libraryAvailable ? 'biblioteca accessible' : 'revisa la unitat O', health.libraryAvailable);
     renderQueue();
     if (state.view === 'discover' && currentTracks.length) renderResults(currentTracks);
-  } catch (error) { $('connectionStatus').textContent = error.message; }
+  } catch (error) { setConnectionStatus('Connexió no disponible', error.message, false); }
   finally { synchronizing = false; }
 }
 function selectView(view) {
@@ -242,8 +303,8 @@ async function refresh() {
   }
 }
 let searchTimer;
-$('searchInput').addEventListener('input', (event) => { state.query = event.target.value.trim(); ++searchSequence; $('clearSearch').hidden = !state.query; clearTimeout(searchTimer); $('results').replaceChildren(); $('emptyState').hidden = true; $('resultsTitle').textContent = state.query.length < 2 ? 'Escriu el nom d’una cançó o artista' : 'Cercant cançons…'; searchTimer = setTimeout(refresh, 450); });
-$('clearSearch').addEventListener('click', () => { $('searchInput').value = ''; state.query = ''; $('clearSearch').hidden = true; refresh(); });
+$('searchInput').addEventListener('input', (event) => { stopPreview(); state.query = event.target.value.trim(); ++searchSequence; $('clearSearch').hidden = !state.query; clearTimeout(searchTimer); $('results').replaceChildren(); $('emptyState').hidden = true; $('resultsTitle').textContent = state.query.length < 2 ? 'Escriu el nom d’una cançó o artista' : 'Cercant cançons…'; searchTimer = setTimeout(refresh, 450); });
+$('clearSearch').addEventListener('click', () => { stopPreview(); $('searchInput').value = ''; state.query = ''; $('clearSearch').hidden = true; refresh(); });
 $('pasteLinkButton').addEventListener('click', async () => { const link = prompt('Enganxa l’enllaç de la cançó de Spotify'); if (!link) return; const match = link.match(/^https:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?track\/([A-Za-z0-9]{22})(?:\?.*)?$/); if (!match) { showToast('Cal un enllaç de cançó de Spotify.'); return; } await enqueue({id:match[1], title:'Cançó de Spotify', artist:'Pendent de resoldre', source:'spotify', url:link}); });
 $('settingsButton').addEventListener('click', () => { $('serverUrl').value = state.serverUrl; $('serverUrl').readOnly = privateSite; $('serverToken').value = state.serverToken; $('serverToken').hidden = privateSite; document.querySelector('label[for="serverToken"]').hidden = privateSite; $('settingsDialog').showModal(); });
 $('settingsForm').addEventListener('submit', (event) => {
