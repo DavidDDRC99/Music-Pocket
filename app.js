@@ -64,9 +64,13 @@ async function searchTracks(query) {
     return tracks;
 }
 
-function setOffline(label = 'Mode demo · configura el servei Windows') { $('connectionStatus').innerHTML = `<span class="status-dot" style="background:#d99727;box-shadow:0 0 0 4px #fff0d2"></span><span>${label}</span>`; $('modeBadge').textContent = 'MODE DEMO'; }
+function setOffline(label = 'Mode demo · configura el servei Windows') { $('connectionStatus').innerHTML = `<span class="status-dot" style="background:#d99727;box-shadow:0 0 0 4px #fff0d2"></span><span>${label}</span>`; }
+function formatDuration(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
 function renderResults(tracks) {
-  $('results').innerHTML = tracks.map((track) => { const added = state.added.has(track.id); return `<article class="track-card"><div class="art" style="--art:${track.art || 'linear-gradient(135deg,#8b9cf5,#374cb8)'}">${initials(track)}</div><div class="track-meta"><div class="track-title">${escapeHtml(track.title)}</div><div class="track-artist">${escapeHtml(track.artist)}</div><div class="track-album">${escapeHtml(track.album || 'Àlbum desconegut')}</div></div><button class="add-button ${added ? 'added' : ''}" data-track="${encodeURIComponent(JSON.stringify(track))}" aria-label="${added ? 'Afegida' : 'Afegeix'}">${added ? '✓' : '+'}</button></article>`; }).join('');
+  $('results').innerHTML = tracks.map((track) => { const added = state.added.has(track.id); return `<article class="track-card"><div class="art" style="--art:${track.art || 'linear-gradient(135deg,#8b9cf5,#374cb8)'}">${initials(track)}</div><div class="track-meta"><div class="track-title">${escapeHtml(track.title)}</div><div class="track-artist">${escapeHtml(track.artist)}</div><div class="track-album">${escapeHtml(track.album || 'Àlbum desconegut')}</div></div><span class="track-duration">${formatDuration(track.duration)}</span><button class="add-button ${added ? 'added' : ''}" data-track="${encodeURIComponent(JSON.stringify(track))}" aria-label="${added ? 'Afegida' : 'Afegeix'}">${added ? '✓' : '+'}</button></article>`; }).join('');
   $('emptyState').hidden = tracks.length !== 0;
   document.querySelectorAll('.add-button').forEach((button) => button.addEventListener('click', () => enqueue(JSON.parse(decodeURIComponent(button.dataset.track)))));
 }
@@ -103,7 +107,12 @@ async function choosePlaylist(track) {
     $('playlistDialog').addEventListener('close', () => resolve(null), { once: true });
   });
 }
-const completed = (job) => ['done', 'duplicate', 'cancelled'].includes(job.status);
+const completed = (job) => ['done', 'duplicate', 'error', 'cancelled'].includes(job.status);
+function statusIcon(status) { return ({ done: '✓', duplicate: '✓', error: '×', cancelled: '×', processing: '…', queued: '•', waiting: '•' })[status] || '•'; }
+async function removeJob(job) {
+  try { await api(`/api/imports/${job.id}/remove`, {method:'POST'}); await syncQueue(); showToast('Eliminada de l’historial'); }
+  catch (error) { showToast(error.message); }
+}
 function renderQueue() {
   $('queueCount').textContent = state.queue.filter((item) => !completed(item)).length;
   const jobs = state.view === 'history' ? state.queue.filter(completed) : state.view === 'queue' ? state.queue.filter((job) => !completed(job)) : state.queue.slice(0, 4);
@@ -114,13 +123,17 @@ function renderQueue() {
     $('queueList').appendChild(p);
   }
   for (const job of jobs) {
-    const row = document.createElement('article'); row.className = 'import-card';
+    const row = document.createElement('article'); row.className = `import-card import-${job.status}`;
+    const header = document.createElement('div'); header.className = 'import-header';
     const title = document.createElement('strong'); title.textContent = job.track.title;
+    const badge = document.createElement('span'); badge.className = `status-badge ${job.status}`; badge.textContent = `${statusIcon(job.status)} ${statusLabel(job.status)}`;
+    header.append(title, badge);
     const artist = document.createElement('p'); artist.className = 'track-artist'; artist.textContent = job.track.artist;
     const phase = document.createElement('p'); phase.className = 'import-phase'; phase.textContent = job.phase || statusLabel(job.status);
     const progress = document.createElement('progress'); progress.max = 100; progress.value = job.progress || 0; progress.setAttribute('aria-label', `Progrés de ${job.track.title}`);
     const message = document.createElement('p'); message.className = 'field-help'; message.textContent = job.message || '';
-    row.append(title, artist, phase, progress, message);
+    row.append(header, artist, phase, progress, message);
+    const actions = document.createElement('div'); actions.className = 'import-actions';
     const action = ['error','cancelled','waiting'].includes(job.status) ? 'retry' : job.status === 'queued' ? 'cancel' : '';
     if (action) {
       const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = action === 'retry' ? 'Reintenta' : 'Cancel·la';
@@ -128,12 +141,16 @@ function renderQueue() {
         button.disabled = true;
         try { await api(`/api/imports/${job.id}/${action}`, {method:'POST'}); await syncQueue(); }
         catch (error) { showToast(error.message); button.disabled = false; }
-      }); row.appendChild(button);
+      }); actions.appendChild(button);
     }
+    if (job.status !== 'processing') {
+      const remove = document.createElement('button'); remove.className = 'remove-button'; remove.textContent = '×'; remove.title = 'Elimina'; remove.setAttribute('aria-label', `Elimina ${job.track.title}`); remove.addEventListener('click', () => removeJob(job)); actions.appendChild(remove);
+    }
+    if (actions.children.length) row.appendChild(actions);
     $('queueList').appendChild(row);
   }
 }
-function statusLabel(status) { return ({ queued: 'En cua', processing: 'Processant', done: 'Importada', duplicate: 'Ja la tens', error: 'Error', cancelled: 'Cancel·lada' })[status] || 'Pendent'; }
+function statusLabel(status) { return ({ queued: 'En cua', processing: 'Processant', waiting: 'En espera', done: 'Importada', duplicate: 'Ja la tens', error: 'Error', cancelled: 'Cancel·lada' })[status] || 'Pendent'; }
 function escapeHtml(value = '') { return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char])); }
 
 async function enqueue(track) {
@@ -181,7 +198,7 @@ function selectView(view) {
   state.view = view;
   if (view !== 'discover') { ++searchSequence; clearTimeout(searchTimer); }
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.view === view));
-  for (const selector of ['.hero-card','.search-section','.app-shell > .section-heading','#results','#emptyState']) document.querySelector(selector).hidden = view !== 'discover';
+  for (const selector of ['.search-section','.app-shell > .section-heading','#results','#emptyState']) document.querySelector(selector).hidden = view !== 'discover';
   if (view === 'discover') refresh();
   $('queuePreview').querySelector('h2').textContent = view === 'history' ? 'Historial' : 'La teva cua';
   $('viewQueueButton').hidden = view !== 'discover';
@@ -195,7 +212,6 @@ async function refresh() {
   $('results').replaceChildren();
   $('emptyState').hidden = true;
   $('results').setAttribute('aria-busy', 'false');
-  $('modeBadge').textContent = 'CERCA DE CANÇONS';
   if (query.length < 2) {
     $('resultsTitle').textContent = 'Escriu el nom d’una cançó o artista';
     return;
