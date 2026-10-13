@@ -10,22 +10,33 @@
   --blue-soft: #eaf0ff;
   --green: #29a169;
   --shadow: 0 18px 50px rgba(29, 32, 45, .08);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  font-family: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-.import-card { padding: 18px; border-radius: 18px; background: white; border: 1px solid var(--line); }
+.import-card { padding: 16px; border-radius: 19px; background: white; border: 1px solid var(--line); box-shadow: 0 7px 22px rgba(38, 41, 57, .04); }
 .import-card strong { display: block; margin-bottom: 6px; }
 .import-phase { font-size: 13px; color: var(--blue); margin: 14px 0 8px; }
 .import-card progress { width: 100%; height: 7px; accent-color: var(--blue); }
 .import-card .field-help { margin-bottom: 10px; }
+.import-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.import-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-badge { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border-radius: 999px; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.status-badge.done, .status-badge.duplicate { color: #237c52; background: #eaf8f0; }
+.status-badge.error, .status-badge.cancelled { color: #b5505a; background: #fff0f1; }
+.status-badge.processing, .status-badge.queued, .status-badge.waiting { color: #4169c8; background: #eef3ff; }
+.import-done, .import-duplicate { border-color: #d7f0e2; }
+.import-error, .import-cancelled { border-color: #f6d9dc; background: #fffdfd; }
+.import-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.remove-button { width: 32px; height: 32px; border-radius: 50%; background: #f3f3f6; color: #8b8e98; font-size: 20px; line-height: 1; }
+.remove-button:hover { background: #fff0f1; color: #b5505a; }
 button:disabled { opacity: .5; cursor: wait; }
 body { margin: 0; background: radial-gradient(circle at 90% 0%, #eef2ff 0, transparent 28rem), var(--canvas); color: var(--ink); min-height: 100vh; }
 button, input { font: inherit; }
 button { border: 0; cursor: pointer; }
-.app-shell { max-width: 760px; margin: 0 auto; padding: 30px 22px 110px; }
+.app-shell { max-width: 760px; margin: 0 auto; padding: 26px 22px 110px; }
 .topbar, .section-heading, .dialog-header, .dialog-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.topbar { margin-bottom: 18px; }
+.topbar { margin-bottom: 13px; }
 .eyebrow { margin: 0 0 7px; color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .16em; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 0; font-size: 28px; letter-spacing: -.045em; }
@@ -35,14 +46,14 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #dcefe5; border-radius: 999px; background: #f2fbf6; color: #247b51; font-size: 12px; font-weight: 650; }
 .status-detail { color: #7da891; font-weight: 500; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px #dcf5e8; }
-.hero-card { position: relative; overflow: hidden; display: flex; justify-content: space-between; min-height: 188px; margin: 20px 0 26px; padding: 28px; border-radius: 28px; background: linear-gradient(118deg, #111a37, #263b86 62%, #758cf0); color: white; box-shadow: 0 22px 55px rgba(31, 50, 121, .22); }
+.hero-card { display: none; }
 .hero-copy { max-width: 390px; align-self: end; }
 .hero-copy .eyebrow { color: #b9c7ff; }
 .hero-copy h2 { font-size: 29px; line-height: 1.04; letter-spacing: -.055em; margin-bottom: 10px; }
 .hero-copy p:last-child { margin: 0; color: #cbd5ff; font-size: 14px; }
 .hero-orb { position: absolute; right: -30px; top: -46px; display: grid; place-items: center; width: 180px; height: 180px; border: 1px solid rgba(255,255,255,.28); border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.34), rgba(255,255,255,.04) 60%); font-size: 62px; color: #e9edff; transform: rotate(13deg); }
 .hero-orb span { transform: rotate(-13deg); }
-.search-section { margin-bottom: 32px; }
+.search-section { margin: 18px 0 30px; }
 .search-box { display: flex; align-items: center; gap: 11px; padding: 0 15px; height: 56px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.9); box-shadow: var(--shadow); }
 .search-box > span { color: var(--muted); font-size: 28px; line-height: 0; transform: rotate(-15deg); }
 .search-box input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 16px; }
@@ -61,6 +72,7 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .track-title { margin-bottom: 5px; font-size: 15px; font-weight: 720; }
 .track-artist { color: var(--muted); font-size: 12px; }
 .track-album { margin-top: 3px; color: #a1a3ab; font-size: 11px; }
+.track-duration { flex: 0 0 auto; color: #8d919d; font-size: 12px; font-variant-numeric: tabular-nums; }
 .add-button { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 23px; transition: .18s ease; }
 .add-button:hover, .add-button.added { background: var(--blue); color: white; }
 .add-button.added { font-size: 17px; }
@@ -103,5 +115,5 @@ h3 { margin-bottom: 6px; font-size: 17px; }
 .primary-button { background: var(--blue); color: white; }
 .toast { position: fixed; z-index: 10; bottom: 94px; left: 50%; max-width: calc(100vw - 36px); padding: 11px 15px; border-radius: 13px; background: #191b22; color: white; font-size: 13px; opacity: 0; pointer-events: none; transform: translate(-50%, 10px); transition: .22s ease; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
-@media (min-width: 700px) { .app-shell { padding-top: 52px; } .hero-card { min-height: 220px; padding: 38px; } .hero-copy h2 { font-size: 37px; } }
+@media (min-width: 700px) { .app-shell { padding-top: 46px; } }
 
