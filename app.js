@@ -7,7 +7,8 @@ const demoTracks = [
 ];
 
 const privateSite = location.hostname.endsWith('.ts.net') || location.hostname === '127.0.0.1';
-const state = { query: '', queue: [], view: 'discover', added: new Set(), sending: new Set(), serverUrl: privateSite ? location.origin : localStorage.getItem('music-pocket-server') || '', serverToken: privateSite ? '' : localStorage.getItem('music-pocket-token') || '' };
+const savedVolume = Number(localStorage.getItem('music-pocket-volume'));
+const state = { query: '', queue: [], view: 'discover', added: new Set(), sending: new Set(), volume: Number.isFinite(savedVolume) ? Math.min(1, Math.max(0, savedVolume)) : .75, muted: localStorage.getItem('music-pocket-muted') === 'true', volumeAvailable: false, serverUrl: privateSite ? location.origin : localStorage.getItem('music-pocket-server') || '', serverToken: privateSite ? '' : localStorage.getItem('music-pocket-token') || '' };
 const $ = (id) => document.getElementById(id);
 const apiBase = () => state.serverUrl.replace(/\/$/, '');
 const apiOptions = (options = {}) => ({ ...options, headers: { ...(options.headers || {}), ...(state.serverToken ? { 'X-API-Key': state.serverToken } : {}) } });
@@ -15,6 +16,40 @@ const apiOptions = (options = {}) => ({ ...options, headers: { ...(options.heade
 function saveQueue() { localStorage.setItem('music-pocket-queue', JSON.stringify(state.queue)); }
 function initials(track) { return (track.initials || track.title.split(/\s+/).slice(0, 2).map((x) => x[0]).join('')).toUpperCase(); }
 function showToast(message) { const toast = $('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 2600); }
+function renderVolumeUi() {
+  const percent = Math.round(state.volume * 100);
+  $('volumeRange').value = String(percent);
+  $('volumeValue').textContent = state.muted ? 'Silenciat' : `${percent}%`;
+  $('muteButton').textContent = state.muted || percent === 0 ? '×' : '⌁';
+  $('muteButton').setAttribute('aria-label', state.muted || percent === 0 ? 'Activa el volum' : 'Silencia el volum');
+  $('volumeButton').textContent = state.muted || percent === 0 ? '×' : '⌁';
+  $('volumeHelp').textContent = state.volumeAvailable ? 'Volum principal de Windows' : 'Volum de previsualització';
+}
+function applyPreviewVolume() { if (previewAudio) previewAudio.volume = state.muted ? 0 : state.volume; }
+let volumeTimer;
+function persistVolume() {
+  localStorage.setItem('music-pocket-volume', String(state.volume));
+  localStorage.setItem('music-pocket-muted', String(state.muted));
+}
+function scheduleSystemVolume() {
+  clearTimeout(volumeTimer);
+  volumeTimer = setTimeout(async () => {
+    if (!state.serverUrl || !state.volumeAvailable) return;
+    try {
+      const result = await api('/api/volume', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({volume: state.volume, muted: state.muted})});
+      if (result.available) { state.volume = result.volume; state.muted = result.muted; persistVolume(); renderVolumeUi(); applyPreviewVolume(); }
+    } catch (error) { showToast(error.message); }
+  }, 140);
+}
+async function loadSystemVolume() {
+  if (!state.serverUrl) return;
+  try {
+    const result = await api('/api/volume');
+    state.volumeAvailable = Boolean(result.available);
+    if (result.available) { state.volume = result.volume; state.muted = result.muted; persistVolume(); }
+  } catch { state.volumeAvailable = false; }
+  renderVolumeUi(); applyPreviewVolume();
+}
 
 const searchCache = new Map();
 let searchSequence = 0;
@@ -107,6 +142,7 @@ function togglePreview(track) {
   stopPreview();
   previewAudio = new Audio(track.previewUrl);
   previewAudio.preload = 'none';
+  previewAudio.volume = state.muted ? 0 : state.volume;
   previewTrackId = track.id;
   previewAudio.addEventListener('ended', stopPreview, { once: true });
   previewAudio.addEventListener('error', () => { stopPreview(); showToast('No s’ha pogut carregar la previsualització.'); }, { once: true });
@@ -310,6 +346,10 @@ let searchTimer;
 $('searchInput').addEventListener('input', (event) => { stopPreview(); state.query = event.target.value.trim(); ++searchSequence; $('clearSearch').hidden = !state.query; clearTimeout(searchTimer); $('results').replaceChildren(); $('emptyState').hidden = true; $('resultsTitle').textContent = state.query.length < 2 ? 'Escriu el nom d’una cançó o artista' : 'Cercant cançons…'; searchTimer = setTimeout(refresh, 450); });
 $('clearSearch').addEventListener('click', () => { stopPreview(); $('searchInput').value = ''; state.query = ''; $('clearSearch').hidden = true; refresh(); });
 $('pasteLinkButton').addEventListener('click', async () => { const link = prompt('Enganxa l’enllaç de la cançó de Spotify'); if (!link) return; const match = link.match(/^https:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?track\/([A-Za-z0-9]{22})(?:\?.*)?$/); if (!match) { showToast('Cal un enllaç de cançó de Spotify.'); return; } await enqueue({id:match[1], title:'Cançó de Spotify', artist:'Pendent de resoldre', source:'spotify', url:link}); });
+$('volumeButton').addEventListener('click', async (event) => { event.stopPropagation(); const open = $('volumePopover').hidden; $('volumePopover').hidden = !open; $('volumeButton').setAttribute('aria-expanded', String(open)); if (open && !state.volumeAvailable) await loadSystemVolume(); });
+$('muteButton').addEventListener('click', () => { state.muted = !state.muted; persistVolume(); renderVolumeUi(); applyPreviewVolume(); scheduleSystemVolume(); });
+$('volumeRange').addEventListener('input', (event) => { state.volume = Number(event.target.value) / 100; state.muted = state.volume === 0; persistVolume(); renderVolumeUi(); applyPreviewVolume(); scheduleSystemVolume(); });
+document.addEventListener('click', (event) => { if (!event.target.closest('.volume-control')) { $('volumePopover').hidden = true; $('volumeButton').setAttribute('aria-expanded', 'false'); } });
 $('settingsButton').addEventListener('click', () => { $('serverUrl').value = state.serverUrl; $('serverUrl').readOnly = privateSite; $('serverToken').value = state.serverToken; $('serverToken').hidden = privateSite; document.querySelector('label[for="serverToken"]').hidden = privateSite; $('settingsDialog').showModal(); });
 $('settingsForm').addEventListener('submit', (event) => {
   if (event.submitter?.value !== 'default') return;
@@ -328,6 +368,8 @@ if (!state.serverUrl) setOffline('Cerca disponible · importació sense configur
 refresh();
 renderQueue();
 syncQueue();
+renderVolumeUi();
+loadSystemVolume();
 setInterval(() => { if (!document.hidden) syncQueue(); }, 3000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) syncQueue(); });
 
